@@ -6,4 +6,7 @@ d = { 'settings': { 'branch': 'main',
                 'git_url': 'https://github.com/DeanLight/slurm_ops',
                 'lib_path': 'slurm_ops'},
   'syms': { 'slurm_ops.core': { 'slurm_ops.core.find_free_port': ('core.html#find_free_port', 'slurm_ops/core.py'),
+                                'slurm_ops.core.get_job_node': ('core.html#get_job_node', 'slurm_ops/core.py'),
+                                'slurm_ops.core.get_port_forwarding_command': ( 'core.html#get_port_forwarding_command',
+                                                                                'slurm_ops/core.py'),
                                 'slurm_ops.core.start_or_connect': ('core.html#start_or_connect', 'slurm_ops/core.py')}}}
