@@ -1,3 +1,4 @@
+import socket
 import subprocess
 
 
@@ -13,13 +14,14 @@ def get_job_node(job_name="proxy_jump", host="tillicum-login"):
     return node
 
 
-def port_forward_cmd(port, job_name="proxy_jump", host="tillicum-login", local_port=None):
-    """Print an ssh port-forward command for a running slurm job."""
+def port_forward(port, job_name="proxy_jump", host="tillicum-login", local_port=None):
+    """Set up SSH port forwarding to a running slurm job's node. Returns local_port."""
     node = get_job_node(job_name, host)
-    local_port = local_port or port
-    cmd = f"ssh -O forward -L {local_port}:{node}.hyak.uw.edu:{port} {host}"
-    print(cmd)
-    return cmd
+    local_port = local_port or find_free_local_port()
+    fwd = f"{local_port}:{node}.hyak.local:{port}"
+    cmd = f"ssh -O forward -L {fwd} {host}"
+    print(f"Run this command to set up port forwarding:\n  {cmd}")
+    return local_port
 
 
 def run_on_job(cmd, job_name="proxy_jump", host="tillicum-login"):
@@ -40,3 +42,10 @@ def run_on_job(cmd, job_name="proxy_jump", host="tillicum-login"):
     if result.stderr:
         print(result.stderr, end="")
     return result
+
+
+def find_free_local_port():
+    """Find an available local port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]

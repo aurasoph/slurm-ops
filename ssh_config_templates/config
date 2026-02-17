@@ -19,6 +19,8 @@ Host tillicum-login
         ServerAliveInterval 30
         ServerAliveCountMax 1200
 
+Host tillicum-node
+        Include tillicum-node-config
 
 Host moana
         User deanlcs
