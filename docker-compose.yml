@@ -1,0 +1,16 @@
+services:
+  main:
+    build:
+      context: .
+      x-bake:
+        args:
+          - --attest=type=sbom
+      dockerfile: Dockerfile
+    image: <IMAGE_NAME> # TODO CHANGE THIS TO FIT YOUR PROJECT
+    platform: linux/amd64
+    volumes:
+      - ./:/app
+    stdin_open: true
+    tty: true 
+    env_file:
+      - .env.dev

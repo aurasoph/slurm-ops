@@ -1,0 +1,12 @@
+repos:
+- repo: https://github.com/fastai/nbdev
+  rev: 2.2.10
+  hooks:
+  - id: nbdev_clean
+  - id: nbdev_export
+
+# TODO: Uncomment this if you want to use the action-validator once you set up github actions
+# - repo: https://github.com/mpalmer/action-validator
+#   rev: v0.5.1  # Use the latest version
+#   hooks:
+#     - id: action-validator

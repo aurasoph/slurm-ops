@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "nbdev_uv"
+  site-url: "https://JohnDoe.github.io/nbdev_uv"
+  description: "Change this to your project description"
+  repo-branch: main
+  repo-url: "https://github.com/JohnDoe/nbdev_uv"

@@ -1,10 +1,118 @@
 [project]
-name = "slurm-ops"
-version = "0.1.0"
-description = "Add your description here"
+name="slurm_ops"
+version = "0.0.1"
+description = "A repo to work with slurm and tillicum/hyak"
 readme = "README.md"
-requires-python = "==3.12.*"
+requires-python=">=3.12"
 dependencies = [
-    "nbdev>=3.0.12",
-    "openai>=2.21.0",
+    "dotenv>=0.9.9",
 ]
+
+
+[dependency-groups]
+dev = [
+    "hatch>=1.14.1",
+    "ipykernel>=6.30.0",
+    "ipywidgets>=8.1.7",
+    "jupyter>=1.1.1",
+    "nbdev>=2.4.5",
+    "nbdime>=4.0.2",
+    "poethepoet>=0.36.0",
+    "pre-commit>=4.2.0",
+    "pytest>=8.4.1",
+    "setuptools>=75.2.0",
+]
+
+
+[tool.nbdev]
+# Core settings
+doc_path = "_docs"
+license = "apache2"
+lib_path = "slurm_ops"
+nbs_path = "nbs"
+recursive = true
+tst_flags = "notest"
+put_version_in_init = true
+branch = "main"
+custom_sidebar = true
+
+# Documentation settings
+doc_host = "https://%(user)s.github.io"
+doc_baseurl = "/%(repo)s"
+git_url = "https://github.com/%(user)s/%(repo)s"
+title = "%(lib_name)s"
+audience = "Developers"
+author = "Dean Light"
+author_email = "dean.light92@gmail.com" 
+copyright = "2024 onwards, %(author)s"
+keywords = "nbdev jupyter notebook python"
+language = "English"
+status = 3
+user = "DeanLight" 
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["slurm_ops"] 
+directory = "dist"
+
+[tool.poe]
+verbosity = 0
+envfile = ".env.dev"
+
+
+[tool.poe.tasks.init]
+help = "Initialise project, including precommit hooks"
+sequence = [
+    {cmd = "pre-commit install"},
+]
+
+
+[tool.poe.tasks._check_env]
+help = "Check if an environment variable is set, used as a helper task for other tasks"
+args = [{ name = "env_name", options = ["--env_name"] }]
+shell = """
+if [ -z "${!env_name}" ]; then
+    echo "Error: $env_name is not set, make sure to set it in the env file" >&2
+    exit 1
+fi
+"""
+interpreter = "bash"
+
+
+[tool.poe.tasks.clean]
+    help = "Remove temporary files generated during build process"
+    cmd  = """
+    rm -rf .pytest_cache "./**/__pycache__" _proc
+    """
+
+[tool.poe.tasks.test]
+    help = "Run tests"
+    sequence = [
+    # if your tests require environment variables, you can add checks for them here
+    # {ref = "_check_env --env_name API_KEY1"},
+    # {ref = "_check_env --env_name API_KEY2"},
+    {cmd = "uv run --active nbdev_test --timing --do_print"}
+    ]
+
+[tool.poe.tasks.sync]
+    help = "Cleans, lints and exports notebooks, syncs settings.ini and uv env"
+    sequence = [
+     { cmd = "python _scripts/sync_settings.py"},
+     { cmd = "nbdev_clean"},
+     { cmd = "nbdev_export"},
+     { cmd = "uv sync --all-extras"},
+    ]
+
+[tool.poe.tasks.pypi]
+    help = "Build the package and publish to PyPI"
+    sequence = [
+        # If you wanna auto publish to pypi you need to set the UV_PUBLISH_TOKEN environment variable
+        {ref = "_check_env --env_name UV_PUBLISH_TOKEN"}, 
+        {cmd = "rm -rf dist/*"},
+        {cmd = "uv build"},
+        {cmd = "uv publish"},
+    ]
