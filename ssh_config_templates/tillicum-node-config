@@ -1,4 +1,4 @@
-Host klone-node
+Host tillicum-node
   User deanlcs
   Hostname g3098               
   ProxyJump tillicum-login
