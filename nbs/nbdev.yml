@@ -2,8 +2,8 @@ project:
   output-dir: _docs
 
 website:
-  title: "nbdev_uv"
-  site-url: "https://JohnDoe.github.io/nbdev_uv"
-  description: "Change this to your project description"
+  title: "slurm_ops"
+  site-url: "https://DeanLight.github.io/slurm_ops"
+  description: "A repo to work with slurm and tillicum/hyak"
   repo-branch: main
-  repo-url: "https://github.com/JohnDoe/nbdev_uv"
+  repo-url: "https://github.com/DeanLight/slurm_ops"

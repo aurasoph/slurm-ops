@@ -8,6 +8,8 @@ __all__ = ['find_free_port', 'start_or_connect', 'job_stat', 'get_port_forwardin
 # %% ../nbs/00_core.ipynb 4
 import socket
 
+
+# %% ../nbs/00_core.ipynb 5
 def find_free_port(above=8000):
     "Find a free port above `above`"
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -20,9 +22,11 @@ def find_free_port(above=8000):
             port = s.getsockname()[1]
         return port
 
-# %% ../nbs/00_core.ipynb 6
+# %% ../nbs/00_core.ipynb 7
 import subprocess
 
+
+# %% ../nbs/00_core.ipynb 8
 def start_or_connect(job_name, host,
                      slurm_args="--qos=debug --gpus=1 --cpus-per-task=8 --mem=200G --time=01:00:00", return_cmd=False):
     """SSH to host, start a tmux session, and allocate a SLURM job inside it.
@@ -60,7 +64,7 @@ def start_or_connect(job_name, host,
         print(f"Run this in your terminal:\n{ssh_cmd}")
         return
 
-# %% ../nbs/00_core.ipynb 8
+# %% ../nbs/00_core.ipynb 11
 def job_stat(job_name, host,silent=False):
     """Get status info for a running SLURM job and print helpful commands.
 
@@ -107,7 +111,7 @@ def job_stat(job_name, host,silent=False):
 
     return node, job_id
 
-# %% ../nbs/00_core.ipynb 10
+# %% ../nbs/00_core.ipynb 13
 def get_port_forwarding_command(local_port, remote_port, host, node, local_network="hyak.local"):
     """Get the command to forward local_port to remote_port on a compute node via the login host.
     Uses SSH local port forwarding with a ProxyJump through the login node.
@@ -121,10 +125,12 @@ def get_port_forwarding_command(local_port, remote_port, host, node, local_netwo
     print(cmd)
     return cmd
 
-# %% ../nbs/00_core.ipynb 12
+# %% ../nbs/00_core.ipynb 15
 import re
 from pathlib import Path
 
+
+# %% ../nbs/00_core.ipynb 16
 def update_ssh_node_config(job_name, host, config_path=None):
     """Query the SLURM node running `job_name` and update the SSH node config with its hostname.
 
