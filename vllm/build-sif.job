@@ -1,0 +1,43 @@
+#!/bin/bash
+#SBATCH --job-name=vllm-build
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=16G
+#SBATCH --partition=cpu-g2-mem2x
+#SBATCH --time=60
+#SBATCH --output=slurm-%j.out
+
+# Build (pull) the vLLM apptainer image into /gscratch/scrubbed.
+# The vllm/vllm-openai image is ~10GB, so the pull takes a while and a
+# fair chunk of /tmp; we redirect the apptainer tmp/cache to gscratch.
+
+set -euo pipefail
+
+DEF="${DEF:-$HOME/projects/gcd/slurm-ops/vllm/vllm.def}"
+G_BASE="/mmfs1/gscratch/scrubbed/$USER"
+OUT="${OUT:-$G_BASE/vllm.sif}"
+TMPDIR_LOCAL="/tmp/$USER/vllm-build-$SLURM_JOB_ID"
+
+# Push apptainer's heavy tempdirs onto gscratch so /tmp doesn't fill up.
+export APPTAINER_CACHEDIR="$G_BASE/.apptainer_cache"
+export APPTAINER_TMPDIR="$G_BASE/.apptainer_tmp"
+
+echo "[build-sif] DEF:  $DEF"
+echo "[build-sif] OUT:  $OUT"
+echo "[build-sif] TMP:  $TMPDIR_LOCAL"
+echo "[build-sif] APPTAINER_TMPDIR: $APPTAINER_TMPDIR"
+
+mkdir -p "$TMPDIR_LOCAL" "$(dirname "$OUT")" \
+         "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+
+command -v apptainer >/dev/null 2>&1 || module load apptainer >/dev/null 2>&1
+
+set -x
+apptainer build --fakeroot "$TMPDIR_LOCAL/image.sif" "$DEF"
+set +x
+
+mv -f "$TMPDIR_LOCAL/image.sif" "$OUT"
+chmod 644 "$OUT"
+rm -rf "$TMPDIR_LOCAL"
+
+echo "[build-sif] done."
+ls -lh "$OUT"

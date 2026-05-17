@@ -1,7 +1,193 @@
-# Tillicum Slurm Ops
+# GCD fork of slurm-ops
+
+This is the GCD project's fork of [DeanLight/slurm-ops](https://github.com/DeanLight/slurm-ops).
+
+**The only changes from upstream:**
+
+1. A new nbdev notebook
+   [`nbs/02_vllm.ipynb`](nbs/02_vllm.ipynb) (with its auto-exported
+   [`slurm_ops/vllm.py`](slurm_ops/vllm.py)) that adds `vllm_up` /
+   `vllm_down`. These **reuse the four primitives from `slurm_ops.core`
+   unchanged** (`start_or_connect`, `job_stat`,
+   `get_port_forwarding_command`, `update_ssh_node_config`); they just
+   *execute* the commands those functions normally print and chain them
+   end-to-end so there are fewer things to copy/paste.
+2. A new [`vllm/`](vllm/) directory with the apptainer recipe
+   (`vllm.def`), the SIF build sbatch (`build-sif.job`), and the
+   compute-node entrypoint (`serve.sh`) that runs
+   `apptainer exec --nv vllm.sif python3 -m vllm…api_server`.
+
+No upstream files were modified.
+
+See [`vllm/README.md`](vllm/README.md) for what `vllm_up` does step by
+step and how each call lines up with an upstream primitive.
+
+---
+
+## End-to-end test: does Qwen3-8B answer over vLLM?
+
+This is the test someone with klone access should be able to follow on
+a fresh laptop, with no further questions. About 15 minutes the first
+time (because `vllm_up` builds the SIF on klone if it isn't there yet),
+~2 minutes on subsequent runs.
+
+### 1. Prereq: laptop can `ssh klone-login` (one time, ever)
+
+Follow upstream's ssh config setup (the section below this one, titled
+*Tillicum Slurm Ops*). Specifically:
+
+```bash
+cp ssh_config_templates/* ~/.ssh/
+# replace 'deanlcs' with your NetID in all three:
+sed -i "s/deanlcs/$USER/g" ~/.ssh/{config,klone-node-config,tillicum-node-config}
+```
+
+Then seed Duo for the day:
+
+```bash
+ssh klone-login true
+# NetID password, Duo push, accept
+ssh klone-login true   # second call should be silent and instant
+```
+
+(You may see `Could not open a connection to your authentication agent`
+on every ssh — that's a benign WSL warning, not an error. Run
+`eval "$(ssh-agent -s)"` if you want it gone.)
+
+### 2. Prereq: the fork is somewhere the laptop's Python can import
+
+```bash
+git clone https://github.com/aurasoph/slurm-ops.git ~/projects/gcd/slurm-ops
+```
+
+(Optional, for notebook use:)
+```bash
+cd ~/projects/gcd/slurm-ops && uv sync
+```
+
+The shell stubs in `vllm/bin/` resolve `slurm_ops` from the repo root
+themselves — they don't need `uv sync`.
+
+### 3. Push the cluster-side artifacts to klone (one time)
+
+`vllm_up` will build the SIF on klone automatically, but it needs the
+recipe + sbatch + serve.sh sitting in your klone home:
+
+```bash
+rsync -av --delete \
+    ~/projects/gcd/slurm-ops/vllm/ \
+    klone-login:projects/gcd/slurm-ops/vllm/
+ssh klone-login "chmod +x ~/projects/gcd/slurm-ops/vllm/*.job \
+                                   ~/projects/gcd/slurm-ops/vllm/*.sh \
+                                   ~/projects/gcd/slurm-ops/vllm/bin/*"
+```
+
+### 4. Smoke test: imports + cluster reachability
+
+```bash
+cd ~/projects/gcd/slurm-ops
+python3 -c "
+from slurm_ops.vllm import sif_exists
+print('sif on klone?', sif_exists('klone-login'))
+"
+```
+
+Expected:
+- `sif on klone? True` if you (or a prior run) have already built it
+- `sif on klone? False` otherwise — `vllm_up` will build it for you in step 5
+
+### 5. Bring up vLLM and hit the endpoint
+
+```bash
+~/projects/gcd/slurm-ops/vllm/bin/vllm-up gcd klone-login
+```
+
+You should see in order:
+
+```
+No running job 'gcd' found. Starting salloc...                  # from upstream start_or_connect
+[vllm] launching: ssh -t klone-login "tmux new-session -A -d -s gcd 'salloc … srun --pty …/serve.sh'"
+[vllm] waiting for salloc to allocate a GPU node...
+[vllm] allocated: job <jobid> on g3xxx                          # from upstream job_stat
+[vllm] waiting for $HOME/.vllm-discovery/gcd.json on klone-login (up to 30 min)...
+   # ~2-5 min: model load + CUDA graph capture on the L40s
+ssh -N -f -L 8000:g3xxx.hyak.local:NNNNN klone-login            # from upstream get_port_forwarding_command
+[vllm] opening forward: ssh -O forward -L 8000:g3xxx.hyak.local:NNNNN klone-login
+Updated ~/.ssh/klone-node-config: Hostname → g3xxx              # from upstream update_ssh_node_config
+
+============================================================
+  vLLM ready: Qwen/Qwen3-8B on g3xxx:NNNNN
+  base_url = http://localhost:8000/v1
+  export OPENAI_BASE_URL='http://localhost:8000/v1'
+  export OPENAI_API_KEY='dummy'
+  export VLLM_MODEL='Qwen/Qwen3-8B'
+============================================================
+```
+
+From another terminal, prove Qwen actually responds:
+
+```bash
+# 1. The vLLM endpoint is reachable
+curl -s http://localhost:8000/v1/models | python3 -m json.tool
+# Expect: {"object":"list","data":[{"id":"Qwen/Qwen3-8B", ...}]}
+
+# 2. Qwen3-8B can complete a prompt
+curl -s http://localhost:8000/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d '{
+          "model": "Qwen/Qwen3-8B",
+          "messages": [{"role":"user","content":"What is 12*7? Answer with just the number."}],
+          "max_tokens": 50,
+          "temperature": 0
+        }' \
+    | python3 -m json.tool
+# Expect: choices[0].message.content contains reasoning that ends with "84"
+```
+
+**That's the test.** Two curls returning valid JSON = Qwen on vLLM
+works end-to-end from your laptop.
+
+### 6. Bonus: VSCode / direct SSH onto the compute node
+
+`vllm_up` called `update_ssh_node_config`, which rewrote
+`~/.ssh/klone-node-config` with the live compute node's hostname.
+Confirm:
+
+```bash
+ssh klone-node hostname        # should print g3xxx
+```
+
+In VSCode: *Remote-SSH → Connect to Host → `klone-node`* attaches an
+editor session to the GPU node directly. (This is upstream slurm-ops's
+feature, unchanged.)
+
+### 7. Tear down
+
+```bash
+~/projects/gcd/slurm-ops/vllm/bin/vllm-down gcd klone-login
+# scancel + tmux kill-session + ssh -O cancel
+```
+
+### Debug toolbox
+
+If something hangs partway through, all of these are direct (no Pi, no
+extras) and safe to run at any time:
+
+```bash
+ssh klone-login squeue --me                              # what's allocated
+ssh klone-login -t tmux attach -t gcd                    # live vLLM stdout (Ctrl+B D to detach)
+ssh klone-login tail -f ~/.vllm-discovery/gcd.log        # persistent serve.sh log
+ssh klone-login cat ~/.vllm-discovery/gcd.json           # discovery (node, port, model)
+ssh klone-login ls -lh /mmfs1/gscratch/scrubbed/$USER/vllm.sif   # is the SIF there?
+```
+
+---
+
+# Tillicum Slurm Ops (upstream README below)
 
 
 <!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<!-- (Above this block was added by the GCD fork; nbdev will not touch it.) -->
 
 ## Get this nb working
 
