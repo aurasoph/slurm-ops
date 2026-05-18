@@ -12,7 +12,10 @@
 
 set -euo pipefail
 
-DEF="${DEF:-$HOME/projects/gcd/slurm-ops/vllm/vllm.def}"
+# SLURM_SUBMIT_DIR is the directory `sbatch` was invoked from; the wrappers
+# always cd into the vllm/ dir first, so vllm.def is right there. Override
+# DEF=... if you submit from somewhere else.
+DEF="${DEF:-${SLURM_SUBMIT_DIR:-$PWD}/vllm.def}"
 G_BASE="/mmfs1/gscratch/scrubbed/$USER"
 OUT="${OUT:-$G_BASE/vllm.sif}"
 TMPDIR_LOCAL="/tmp/$USER/vllm-build-$SLURM_JOB_ID"

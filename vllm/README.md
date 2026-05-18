@@ -29,10 +29,10 @@ info = vllm_up("gcd", "klone-login")   # blocks until /v1/models is live
 vllm_down("gcd", "klone-login")
 ```
 
-From the shell:
+From the shell (run from the repo root, or use the absolute path to `vllm/bin/vllm-up`):
 ```bash
-vllm-up gcd klone-login         # same thing, no notebook needed
-vllm-down gcd klone-login
+./vllm/bin/vllm-up gcd klone-login         # same thing, no notebook needed
+./vllm/bin/vllm-down gcd klone-login
 ```
 
 ## What this extension *adds* on top of upstream slurm-ops
@@ -55,9 +55,9 @@ forwarding, the `Host klone-node` ProxyJump config that
 ## How vllm_up wires the upstream primitives
 
 ```
-                 sif_exists(host) ─── (build_sif if missing) ─┐
+                 resolve_sif(host) ── (build_sif if missing) ─┐
                                                               ▼
-slurm_args = "--account=amath ... srun --pty serve.sh"        │
+slurm_args = "--account=stf ... srun --pty serve.sh"          │
                                                               ▼
 start_or_connect(job_name, host, slurm_args, return_cmd=True) │
    returns:  ssh -t klone-login "tmux new-session -A -s gcd '…salloc…'"

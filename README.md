@@ -34,17 +34,28 @@ the cached session for 10 hours.
 ### 2. Bring it up
 
 ```bash
-git clone https://github.com/aurasoph/slurm-ops.git ~/projects/gcd/slurm-ops
+git clone https://github.com/aurasoph/slurm-ops.git
+cd slurm-ops
 
-ssh klone-login true                                     # Duo, once per ~10h
+ssh klone-login true                          # Duo, once per ~10h
 
-rsync -a ~/projects/gcd/slurm-ops/vllm/ klone-login:projects/gcd/slurm-ops/vllm/
-ssh klone-login "chmod +x ~/projects/gcd/slurm-ops/vllm/{*.{sh,job},bin/*}"
+# push the cluster-side artifacts (vllm.def, serve.sh, build-sif.job)
+# into ~/slurm-ops/vllm on klone. The directory name there is matched by
+# the `remote_vllm_dir` default in slurm_ops/vllm.py — change both if you
+# want a different location.
+rsync -a vllm/ klone-login:slurm-ops/vllm/
+ssh klone-login 'chmod +x ~/slurm-ops/vllm/*.sh ~/slurm-ops/vllm/*.job ~/slurm-ops/vllm/bin/*'
 
-~/projects/gcd/slurm-ops/vllm/bin/vllm-up gcd klone-login
-# ~2 min warm, ~25 min the first time (builds the apptainer SIF on klone)
-# prints OPENAI_BASE_URL=http://localhost:8000/v1 when ready
+./vllm/bin/vllm-up gcd klone-login
+# Prints OPENAI_BASE_URL=http://localhost:8000/v1 when ready.
+# On a fresh NetID this reuses /mmfs1/gscratch/scrubbed/aurasoph/vllm.sif
+# (world-readable, ~7.6 GB) so cold start is ~2 min. If that shared SIF
+# isn't readable for you, it falls through to a ~25 min apptainer build
+# of your own /mmfs1/gscratch/scrubbed/$USER/vllm.sif.
 ```
+
+Default SLURM allocation is `--account=stf --partition=gpu-l40s --gres=gpu:1`.
+Override with `./vllm/bin/vllm-up gcd klone-login --slurm-args "--account=YOUR_ACCOUNT --partition=… --gres=gpu:1 --cpus-per-task=8 --mem=48G --time=04:00:00"`.
 
 ### 3. Smoke test (inline curl, no extra tooling)
 
@@ -68,7 +79,7 @@ curl -s http://localhost:8000/v1/chat/completions \
 ### 4. Tear down
 
 ```bash
-~/projects/gcd/slurm-ops/vllm/bin/vllm-down gcd klone-login
+./vllm/bin/vllm-down gcd klone-login
 ```
 
 ### Debug
