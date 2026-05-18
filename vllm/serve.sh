@@ -11,8 +11,8 @@
 #   SERVED_NAME    --served-model-name (default: $MODEL)
 #   MAX_LEN        --max-model-len (default: model default)
 #   VLLM_EXTRA     extra args to vllm api_server
-#   VLLM_SIF       SIF path (default: /gscratch/scrubbed/$USER/vllm.sif)
-#   HF_CACHE       HF cache dir (default: /gscratch/scrubbed/$USER/.hf_cache)
+#   VLLM_SIF       SIF path (default: /mmfs1/gscratch/scrubbed/$USER/vllm.sif)
+#   HF_CACHE       HF cache dir (default: /mmfs1/gscratch/scrubbed/$USER/.hf_cache)
 
 set -euo pipefail
 
@@ -124,7 +124,7 @@ cat <<BANNER
   model        : $MODEL  (served as: $SERVED_NAME)
   discovery    : $DISC_FILE
   log          : $LOG_FILE
-  attach       : pi; ssh klone-login; tmux attach -t $JOB_NAME
+  attach       : ssh klone-login -t tmux attach -t $JOB_NAME
 ============================================================
 BANNER
 

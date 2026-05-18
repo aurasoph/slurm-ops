@@ -4,48 +4,22 @@
 # the command line without firing up a notebook.
 #
 # Usage:
-#   vllm-up <job-name> [host] [--model M] [--local-port N] [--slurm-args "..."]
-#     host defaults to klone-login.
+#   vllm-up [job-name] [host] [--model M] [--local-port N]
+#           [--account ACCOUNT] [--partition PARTITION] [--time HH:MM:SS]
+#           [--slurm-args "..."]
+#
+#   job-name defaults to qwen; host defaults to klone-login.
+#   Defaults are stf/gpu-l40s/1 GPU/4h. For local testing:
+#     vllm-up qwen-test klone-login --account amath --time 01:00:00
 #
 # Requires: the slurm-ops package on Python path (uv-synced or pip-installed).
 
 set -euo pipefail
 
-JOB_NAME=""
-HOST="klone-login"
-MODEL=""
-LOCAL_PORT="8000"
-SLURM_ARGS=""
-
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -h|--help)
-            sed -n '2,/^set -e/p' "$0" | sed -n 's/^# \{0,1\}//p'
-            exit 0
-            ;;
-        --model)       MODEL="$2"; shift 2 ;;
-        --local-port)  LOCAL_PORT="$2"; shift 2 ;;
-        --slurm-args)  SLURM_ARGS="$2"; shift 2 ;;
-        --*) echo "vllm-up: unknown flag: $1" >&2; exit 2 ;;
-        *)
-            if   [ -z "$JOB_NAME" ]; then JOB_NAME="$1"
-            else HOST="$1"
-            fi
-            shift
-            ;;
-    esac
-done
-
-[ -n "$JOB_NAME" ] || { echo "vllm-up: missing job name. Usage: vllm-up <job-name> [host]" >&2; exit 2; }
-
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"   # repo root
 exec python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
-from slurm_ops.vllm import vllm_up, DEFAULT_MODEL, DEFAULT_SLURM_ARGS
-kw = dict(job_name='$JOB_NAME', host='$HOST', local_port=$LOCAL_PORT)
-m = '$MODEL'
-sa = '''$SLURM_ARGS'''
-if m: kw['model'] = m
-if sa.strip(): kw['slurm_args'] = sa
-vllm_up(**kw)
-"
+import sys
+sys.path.insert(0, sys.argv[1])
+from slurm_ops.vllm import main_up
+raise SystemExit(main_up(sys.argv[2:]))
+" "$SCRIPT_DIR" "$@"

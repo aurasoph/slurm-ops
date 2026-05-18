@@ -1,4 +1,4 @@
 Host klone-node
-  User deanlcs
+  User <your-netid>
   Hostname g3098               
   ProxyJump klone-login

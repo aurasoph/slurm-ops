@@ -1,29 +1,12 @@
 ControlMaster auto
-ControlPersist yes
-ControlPath ~/.ssh/socket-%r@%h:%p
+ControlPath ~/.ssh/cm-%r@%h:%p
+ControlPersist 10h
 StreamLocalBindUnlink yes
 
 Host klone-login
-        User deanlcs
-        Hostname klone.hyak.uw.edu
-        ServerAliveInterval 30
-        ServerAliveCountMax 1200
-
+        User <your-netid>
+        HostName klone.hyak.uw.edu
+        ServerAliveInterval 60
 
 Host klone-node
-    Include klone-node-config
-
-Host tillicum-login
-        User deanlcs
-        Hostname tillicum.hyak.uw.edu
-        ServerAliveInterval 30
-        ServerAliveCountMax 1200
-
-Host tillicum-node
-        Include tillicum-node-config
-
-Host moana
-        User deanlcs
-        Hostname moana.cs.washington.edu
-        ServerAliveInterval 30
-        ServerAliveCountMax 1200
+        Include klone-node-config

@@ -2,37 +2,15 @@
 # vllm-down — thin shell wrapper around slurm_ops.vllm.vllm_down.
 #
 # Usage:
-#   vllm-down <job-name> [host] [--local-port N]
-#     host defaults to klone-login.
+#   vllm-down [job-name] [host] [--local-port N]
+#     job-name defaults to qwen; host defaults to klone-login.
 
 set -euo pipefail
 
-JOB_NAME=""
-HOST="klone-login"
-LOCAL_PORT="8000"
-
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -h|--help)
-            sed -n '2,/^set -e/p' "$0" | sed -n 's/^# \{0,1\}//p'
-            exit 0
-            ;;
-        --local-port)  LOCAL_PORT="$2"; shift 2 ;;
-        --*) echo "vllm-down: unknown flag: $1" >&2; exit 2 ;;
-        *)
-            if   [ -z "$JOB_NAME" ]; then JOB_NAME="$1"
-            else HOST="$1"
-            fi
-            shift
-            ;;
-    esac
-done
-
-[ -n "$JOB_NAME" ] || { echo "vllm-down: missing job name. Usage: vllm-down <job-name> [host]" >&2; exit 2; }
-
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"   # repo root
 exec python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
-from slurm_ops.vllm import vllm_down
-vllm_down(job_name='$JOB_NAME', host='$HOST', local_port=$LOCAL_PORT)
-"
+import sys
+sys.path.insert(0, sys.argv[1])
+from slurm_ops.vllm import main_down
+raise SystemExit(main_down(sys.argv[2:]))
+" "$SCRIPT_DIR" "$@"

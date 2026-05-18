@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# vllm-chat - ask the local vLLM OpenAI-compatible endpoint one question.
+#
+# Usage:
+#   vllm-chat [prompt words...] [--base-url URL] [--model MODEL]
+#
+# Defaults to http://localhost:8000/v1, API key "dummy", and Qwen/Qwen3-8B
+# unless OPENAI_BASE_URL / OPENAI_API_KEY / VLLM_MODEL are set.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"   # repo root
+exec python3 -c "
+import sys
+sys.path.insert(0, sys.argv[1])
+from slurm_ops.vllm import main_chat
+raise SystemExit(main_chat(sys.argv[2:]))
+" "$SCRIPT_DIR" "$@"

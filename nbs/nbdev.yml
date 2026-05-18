@@ -4,6 +4,6 @@ project:
 website:
   title: "slurm_ops"
   site-url: "https://DeanLight.github.io/slurm_ops"
-  description: "A repo to work with slurm and tillicum/hyak"
+  description: "Utilities for running vLLM on Klone/HYAK via Slurm"
   repo-branch: main
   repo-url: "https://github.com/DeanLight/slurm_ops"

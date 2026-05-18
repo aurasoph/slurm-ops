@@ -1,123 +1,96 @@
-# vllm/ — apptainer artifacts for the vLLM extension
+# vllm/
 
-The driver logic for bringing vLLM up lives in
-[`slurm_ops/vllm.py`](../slurm_ops/vllm.py) (auto-exported from
-[`nbs/02_vllm.ipynb`](../nbs/02_vllm.ipynb)) and **reuses the four
-primitives from `slurm_ops.core` unchanged** — `start_or_connect`,
-`job_stat`, `get_port_forwarding_command`, `update_ssh_node_config`.
+Cluster-side files and local wrappers for running Qwen3-8B on Klone through
+vLLM.
 
-This directory only holds the cluster-side container artifacts:
+The driver logic lives in [slurm_ops/vllm.py](../slurm_ops/vllm.py), exported
+from [nbs/02_vllm.ipynb](../nbs/02_vllm.ipynb). This directory contains the
+Apptainer recipe, the compute-node server script, and shell entrypoints.
 
-```
+```text
 vllm/
-├── vllm.def        # apptainer recipe (Bootstrap: docker, From: vllm/vllm-openai)
-├── build-sif.job   # sbatch (one-off): pull → /gscratch/scrubbed/$USER/vllm.sif
-├── serve.sh        # runs inside salloc on the compute node;
-│                   # apptainer exec --nv vllm.sif python3 -m vllm…api_server
+├── vllm.def
+├── build-sif.job
+├── serve.sh
 └── bin/
-    ├── vllm-up     # thin shell stub: python -c 'from slurm_ops.vllm import vllm_up; vllm_up(...)'
-    └── vllm-down   # thin shell stub for vllm_down(...)
+    ├── vllm-up
+    ├── vllm-chat
+    └── vllm-down
 ```
 
-## Usage
+## Workflow
 
-From a notebook (matches upstream slurm-ops's flow exactly):
-```python
-from slurm_ops.vllm import vllm_up, vllm_down
-info = vllm_up("gcd", "klone-login")   # blocks until /v1/models is live
-# … point any OpenAI client at info['base_url'] …
-vllm_down("gcd", "klone-login")
-```
-
-From the shell (run from the repo root, or use the absolute path to `vllm/bin/vllm-up`):
-```bash
-./vllm/bin/vllm-up gcd klone-login         # same thing, no notebook needed
-./vllm/bin/vllm-down gcd klone-login
-```
-
-## What this extension *adds* on top of upstream slurm-ops
-
-Per the design constraint, **the only differences from upstream are**:
-
-1. **Less manual work.** Upstream's `start_or_connect` and
-   `get_port_forwarding_command` *print* commands you copy/paste; our
-   `vllm_up` calls them with `return_cmd=True` and **executes** the
-   strings. Same commands, no copy step.
-2. **Containerized runtime.** The command inside the salloc shell is
-   `apptainer exec --nv vllm.sif python3 -m vllm…api_server` instead of
-   a bare command. The SIF gives a reproducible vLLM+CUDA stack
-   independent of the host cluster's libraries.
-
-Everything else — the ssh + tmux + salloc idiom, the ssh -L port
-forwarding, the `Host klone-node` ProxyJump config that
-`update_ssh_node_config` rewrites — is upstream's, used unmodified.
-
-## How vllm_up wires the upstream primitives
-
-```
-                 resolve_sif(host) ── (build_sif if missing) ─┐
-                                                              ▼
-slurm_args = "--account=stf ... srun --pty serve.sh"          │
-                                                              ▼
-start_or_connect(job_name, host, slurm_args, return_cmd=True) │
-   returns:  ssh -t klone-login "tmux new-session -A -s gcd '…salloc…'"
-                                                              ▼
-   ↓ we execute it (upstream prints; we run)
-                                                              ▼
-job_stat(job_name, host)  → (node, jobid)        [poll until allocated]
-                                                              ▼
-wait_for_discovery(job_name, host) → {"node","port","model",...}
-                                                              ▼
-get_port_forwarding_command(local_port, remote_port, host, node)
-   returns:  ssh -N -f -L LOCAL:NODE.hyak.local:REMOTE klone-login
-                                                              ▼
-   ↓ we run an equivalent `ssh -O forward` against the ControlMaster
-                                                              ▼
-update_ssh_node_config(job_name, host)            [VSCode-attach bonus]
-                                                              ▼
-return {"base_url": "http://localhost:8000/v1", ...}
-```
-
-## Prereqs
-
-The upstream slurm-ops ssh template gets you there:
+Sync the files to Klone:
 
 ```bash
-cp ssh_config_templates/* ~/.ssh/
-sed -i 's/deanlcs/<your-netid>/g' ~/.ssh/{config,klone-node-config,tillicum-node-config}
+ssh klone-login 'mkdir -p ~/slurm-ops/vllm'
+rsync -a vllm/ klone-login:slurm-ops/vllm/
+ssh klone-login 'chmod +x ~/slurm-ops/vllm/*.sh ~/slurm-ops/vllm/*.job ~/slurm-ops/vllm/bin/*'
 ```
 
-Then one Duo seed for the day:
+Start the default `stf` allocation:
+
 ```bash
-ssh klone-login true
+./vllm/bin/vllm-up qwen klone-login
 ```
 
-Subsequent `ssh klone-login` calls (including everything `vllm_up` does)
-reuse the cached session via `ControlMaster auto + ControlPersist`.
+For local testing with `amath`:
 
-## The `serve.sh` script
+```bash
+./vllm/bin/vllm-up qwen-test klone-login --account amath --time 01:00:00
+```
 
-`serve.sh` is the only piece that runs on the GPU node. It:
-1. Reads `MODEL` from env (default `Qwen/Qwen3-8B`).
-2. Picks a free remote port.
-3. Runs `apptainer exec --nv --bind <hf-cache>:/cache vllm.sif python3 -m vllm.entrypoints.openai.api_server --model … --host 0.0.0.0 --port …` in the background.
-4. Polls `curl --noproxy '*' http://127.0.0.1:<port>/v1/models` until it answers (compute nodes route through a squid proxy; `--noproxy '*'` bypasses it for the local check).
-5. Writes `~/.vllm-discovery/<job-name>.json` so `vllm_up` knows where to forward.
-6. Blocks on the vLLM process; cleans up the discovery file on exit.
+Ask Qwen something:
 
-## Tweaks
+```bash
+./vllm/bin/vllm-chat --base-url http://localhost:8000/v1 "Reply with exactly: qwen-ready"
+```
 
-| via env in `vllm-up`                  | what it does                  |
-| ------------------------------------- | ----------------------------- |
-| `--model HFREPO/Model`                | swap the served model         |
-| `--local-port N`                      | bind localhost on a different port (default 8000) |
-| `--slurm-args "--time=08:00:00 …"`    | override default salloc flags |
+Stop the job:
 
-## Trade-off vs sbatch
+```bash
+./vllm/bin/vllm-down qwen klone-login --local-port 8000
+```
 
-We deliberately mirror upstream's `salloc + tmux` instead of running
-vLLM as a long-running sbatch job. Consequence: **if the login node
-reboots, the tmux session (and the salloc inside it) die**. With sbatch
-the job would have survived. We chose the slurm-ops idiom for
-debuggability (`ssh klone-login -t tmux attach -t <name>` shows live
-vLLM output) and consistency with upstream.
+If `localhost:8000` is already in use, `vllm-up` chooses the next free local
+port and prints the exact chat and stop commands to use.
+
+## Defaults
+
+`vllm-up` defaults to:
+
+```text
+--account=stf --partition=gpu-l40s --gres=gpu:1 --cpus-per-task=8 --mem=48G --time=04:00:00
+```
+
+Resource flags can be overridden individually:
+
+```bash
+./vllm/bin/vllm-up qwen klone-login --account amath --time 01:00:00
+```
+
+or as a raw `salloc` resource string:
+
+```bash
+./vllm/bin/vllm-up qwen klone-login --slurm-args "--account=amath --partition=gpu-l40s --gres=gpu:1 --cpus-per-task=8 --mem=48G --time=01:00:00"
+```
+
+## What `vllm-up` does
+
+1. Reuses an existing `/mmfs1/gscratch/scrubbed/$USER/vllm.sif`, or the shared
+   fallback `/mmfs1/gscratch/scrubbed/aurasoph/vllm.sif`.
+2. Builds a personal SIF with `build-sif.job` if neither exists.
+3. Starts a detached tmux session on `klone-login`.
+4. Runs `salloc ... srun --pty ~/slurm-ops/vllm/serve.sh`.
+5. Waits for `serve.sh` to publish `~/.vllm-discovery/<job>.json`.
+6. Opens a local SSH forward so the printed `http://localhost:<port>/v1`
+   endpoint reaches the vLLM server on the compute node.
+
+## Debug
+
+```bash
+ssh klone-login -t tmux attach -t qwen
+ssh klone-login tail -f ~/.vllm-discovery/qwen.log
+ssh klone-login cat ~/.vllm-discovery/qwen.json
+ssh klone-login squeue --me
+```
