@@ -10,28 +10,75 @@ No upstream files modified. Full design in [`vllm/README.md`](vllm/README.md).
 
 ## Test that Qwen3-8B answers over vLLM
 
-After upstream's [ssh config setup](#tillicum-slurm-ops-upstream-readme-below):
+Prereqs: a UW NetID with klone access, Duo enrolled.
+
+### 1. SSH config (one-time per laptop)
+
+Paste this into `~/.ssh/config`, replacing `<your-netid>`:
+
+```
+Host klone-login
+    HostName klone.hyak.uw.edu
+    User <your-netid>
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%r@%h:%p
+    ControlPersist 10h
+    ServerAliveInterval 60
+```
+
+The `ControlMaster + ControlPersist 10h` is what makes the rest of this
+work without a Duo prompt every command: complete Duo once, every
+subsequent `ssh klone-login` (and everything `vllm_up` does) reuses
+the cached session for 10 hours.
+
+### 2. Bring it up
 
 ```bash
-# one-time
 git clone https://github.com/aurasoph/slurm-ops.git ~/projects/gcd/slurm-ops
+
 ssh klone-login true                                     # Duo, once per ~10h
+
 rsync -a ~/projects/gcd/slurm-ops/vllm/ klone-login:projects/gcd/slurm-ops/vllm/
 ssh klone-login "chmod +x ~/projects/gcd/slurm-ops/vllm/{*.{sh,job},bin/*}"
 
-# bring up + verify
-~/projects/gcd/slurm-ops/vllm/bin/vllm-up gcd klone-login           # ~2 min warm, ~25 min cold-build
+~/projects/gcd/slurm-ops/vllm/bin/vllm-up gcd klone-login
+# ~2 min warm, ~25 min the first time (builds the apptainer SIF on klone)
+# prints OPENAI_BASE_URL=http://localhost:8000/v1 when ready
+```
+
+### 3. Smoke test (inline curl, no extra tooling)
+
+```bash
+# list served models
+curl -s http://localhost:8000/v1/models | python3 -m json.tool
+
+# ask Qwen3-8B something
 curl -s http://localhost:8000/v1/chat/completions \
     -H 'Content-Type: application/json' \
-    -d '{"model":"Qwen/Qwen3-8B","messages":[{"role":"user","content":"What is 12*7?"}],"max_tokens":50}'
-# expect choices[0].message.content to reason its way to 84
+    -d '{
+          "model": "Qwen/Qwen3-8B",
+          "messages": [{"role": "user", "content": "Reply with one word: ping or pong?"}],
+          "max_tokens": 20,
+          "temperature": 0
+        }' \
+    | python3 -m json.tool
+# expect choices[0].message.content to be a single word
+```
 
-# tear down
+### 4. Tear down
+
+```bash
 ~/projects/gcd/slurm-ops/vllm/bin/vllm-down gcd klone-login
 ```
 
-Debug: `ssh klone-login -t tmux attach -t gcd` (live vLLM stdout),
-`ssh klone-login tail -f ~/.vllm-discovery/gcd.log` (persistent log).
+### Debug
+
+```bash
+ssh klone-login -t tmux attach -t gcd            # live vLLM stdout (Ctrl+B D to detach)
+ssh klone-login tail -f ~/.vllm-discovery/gcd.log # persistent log
+ssh klone-login cat ~/.vllm-discovery/gcd.json   # node, port, model
+ssh klone-login squeue --me                      # what's currently allocated
+```
 
 ---
 
