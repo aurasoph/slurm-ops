@@ -42,7 +42,9 @@ ssh klone-login true                          # Duo, once per ~10h
 # push the cluster-side artifacts (vllm.def, serve.sh, build-sif.job)
 # into ~/slurm-ops/vllm on klone. The directory name there is matched by
 # the `remote_vllm_dir` default in slurm_ops/vllm.py — change both if you
-# want a different location.
+# want a different location. (mkdir is explicit because klone's rsync is
+# 3.1.3, too old for --mkpath.)
+ssh klone-login 'mkdir -p slurm-ops/vllm'
 rsync -a vllm/ klone-login:slurm-ops/vllm/
 ssh klone-login 'chmod +x ~/slurm-ops/vllm/*.sh ~/slurm-ops/vllm/*.job ~/slurm-ops/vllm/bin/*'
 
