@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# gcd-agent — thin shell wrapper around slurm_ops.agent.main.
+# All logic lives in slurm_ops/agent.py; this just resolves the repo
+# root so Python can import slurm_ops without an editable install.
+#
+# Usage:
+#   gcd-agent                             # reads LEAN_REPO_PATH from env / .env
+#   gcd-agent --project /path/to/lean     # explicit override
+#   gcd-agent --context "prefer short proof patches"
+#   gcd-agent --instructions /path/to/.gcd/agent.md
+#   gcd-agent --env-file /custom/.env     # explicit dotenv path
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"   # repo root
+exec python3 -c "
+import sys; sys.path.insert(0, '$SCRIPT_DIR')
+from slurm_ops.agent import main
+raise SystemExit(main())
+" "$@"

@@ -9,7 +9,7 @@
 # Override via env:
 #   MODEL          HF model id (default: Qwen/Qwen3-8B)
 #   SERVED_NAME    --served-model-name (default: $MODEL)
-#   MAX_LEN        --max-model-len (default: model default)
+#   MAX_LEN        --max-model-len (default: 24576; conservative smoke-test context)
 #   VLLM_EXTRA     extra args to vllm api_server
 #   VLLM_SIF       SIF path (default: /mmfs1/gscratch/scrubbed/$USER/vllm.sif)
 #   HF_CACHE       HF cache dir (default: /mmfs1/gscratch/scrubbed/$USER/.hf_cache)
@@ -31,7 +31,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 MODEL="${MODEL:-Qwen/Qwen3-8B}"
 SERVED_NAME="${SERVED_NAME:-$MODEL}"
-MAX_LEN="${MAX_LEN:-}"
+MAX_LEN="${MAX_LEN:-24576}"
 VLLM_EXTRA="${VLLM_EXTRA:-}"
 
 if [ ! -f "$SIF" ]; then
@@ -51,6 +51,7 @@ echo "[vllm] node       : $NODE"
 echo "[vllm] port       : $PORT"
 echo "[vllm] job        : $JOB_NAME ($JOB_ID)"
 echo "[vllm] model      : $MODEL  (served as $SERVED_NAME)"
+echo "[vllm] max len    : $MAX_LEN"
 echo "[vllm] sif        : $SIF"
 echo "[vllm] hf cache   : $HF_CACHE"
 echo "[vllm] discovery  : $DISC_FILE"
@@ -112,7 +113,7 @@ fi
 # Publish discovery atomically.
 tmp="${DISC_FILE}.tmp.$$"
 cat > "$tmp" <<JSON
-{"node": "$NODE", "port": $PORT, "model": "$MODEL", "served_name": "$SERVED_NAME", "job_id": "$JOB_ID", "job_name": "$JOB_NAME"}
+{"node": "$NODE", "port": $PORT, "model": "$MODEL", "served_name": "$SERVED_NAME", "max_len": "$MAX_LEN", "job_id": "$JOB_ID", "job_name": "$JOB_NAME"}
 JSON
 mv -f "$tmp" "$DISC_FILE"
 
@@ -122,6 +123,7 @@ cat <<BANNER
   node         : $NODE
   port         : $PORT
   model        : $MODEL  (served as: $SERVED_NAME)
+  max len      : $MAX_LEN
   discovery    : $DISC_FILE
   log          : $LOG_FILE
   attach       : ssh klone-login -t tmux attach -t $JOB_NAME

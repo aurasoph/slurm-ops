@@ -9,7 +9,7 @@
 #           [--slurm-args "..."]
 #
 #   job-name defaults to qwen; host defaults to klone-login.
-#   Defaults are stf/gpu-l40s/1 GPU/4h. For local testing:
+#   Defaults are stf/gpu-l40s/gpu:1/4h/max-len 24576. For local testing:
 #     vllm-up qwen-test klone-login --account amath --time 01:00:00
 #
 # Requires: the slurm-ops package on Python path (uv-synced or pip-installed).

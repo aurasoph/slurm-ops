@@ -23,6 +23,7 @@ EXPORTS = [
     "DEFAULT_TIME",
     "DEFAULT_SLURM_ARGS",
     "DEFAULT_MODEL",
+    "DEFAULT_MAX_LEN",
     "SHARED_SIF_PATH",
     "make_slurm_args",
     "sif_exists",

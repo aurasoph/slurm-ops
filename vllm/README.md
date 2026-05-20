@@ -40,11 +40,22 @@ For local testing with `amath`:
 ./vllm/bin/vllm-up qwen-test klone-login --account amath --time 01:00:00
 ```
 
+That uses the default L40S request. If it queues for `Resources`, cancel it and
+try the RTX 6000 checkpoint partition:
+
+```bash
+./vllm/bin/vllm-down qwen-test klone-login --local-port 8000
+./vllm/bin/vllm-up qwen-test klone-login --account amath --partition ckpt --gres gpu:rtx6k:1 --time 01:00:00
+```
+
 Ask Qwen something:
 
 ```bash
 ./vllm/bin/vllm-chat --base-url http://localhost:8000/v1 "Reply with exactly: qwen-ready"
 ```
+
+`vllm-chat` appends `/no_think` by default and strips Qwen3 `<think>` blocks
+from the printed response. Pass `--think` if you want the raw reasoning mode.
 
 Stop the job:
 
@@ -55,13 +66,22 @@ Stop the job:
 If `localhost:8000` is already in use, `vllm-up` chooses the next free local
 port and prints the exact chat and stop commands to use.
 
+Readiness can take several minutes after Slurm allocates the node while
+Qwen3-8B loads from the existing SIF/HF cache. That is normal and does not mean
+the container is rebuilding.
+
 ## Defaults
 
 `vllm-up` defaults to:
 
 ```text
 --account=stf --partition=gpu-l40s --gres=gpu:1 --cpus-per-task=8 --mem=48G --time=04:00:00
+--max-len=24576
 ```
+
+`MAX_LEN=24576` is a conservative smoke-test default. Use `--max-len 0` to use
+the model default on larger GPUs. On Klone, RTX 6000 GPUs are requested as GRES
+`gpu:rtx6k`; `gpu-rtx6` is not a Slurm partition name.
 
 Resource flags can be overridden individually:
 
